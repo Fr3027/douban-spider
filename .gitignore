@@ -1,3 +1,5 @@
 *.pyc
 __pychache__
 result.sqlite
+
+.DS_Store

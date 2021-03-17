@@ -31,7 +31,15 @@ class Utils(object):
         else:
             return datetime.date.today()
 
-
+    @staticmethod
+    def getSession():
+        from sqlalchemy import create_engine
+        engine = create_engine('sqlite:///result.sqlite')
+        from sqlalchemy.orm import sessionmaker
+        session = sessionmaker()
+        session.configure(bind=engine)
+        return session()
+        
     def export(self, filename):
         conn = sqlite3.connect(filename)
         conn.text_factory = str

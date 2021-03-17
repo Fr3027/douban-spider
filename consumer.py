@@ -3,6 +3,9 @@ import sqlite3
 import json
 import datetime
 from logHandler import LogHandler
+from topic import Topic
+from utils import Utils
+from sqlalchemy.exc import IntegrityError
 
 
 class PageListConsumer(Thread):
@@ -12,45 +15,58 @@ class PageListConsumer(Thread):
         self.queue = queue
 
     def run(self):
-        conn = sqlite3.connect('result.sqlite', isolation_level=None)
-        conn.text_factory = str
-        cursor = conn.cursor()
-
+        from sqlalchemy import create_engine
+        engine = create_engine('sqlite:///result.sqlite')
+        from sqlalchemy.orm import sessionmaker
+        session = sessionmaker()
+        session.configure(bind=engine)
+        s = session()
         while(1):
             data = self.queue.get()
             try:
-                cursor.execute(
-                    'INSERT INTO rent(id, title, url, itemtime, crawtime, source, keyword, note, publishdate,name,avatar,images,paragraph) VALUES(NULL, ?, ?, ?, ?, ?, ?, ?,NULL,NULL,NULL,NULL,NULL)', [data['title_text'], data['link_text'], data['target_time'], datetime.datetime.now(), data['douban_url_name'][0], data['keyword'], data['reply_count']])
-                self.log.info('add success:')
-            
-            except sqlite3.IntegrityError:# URL should be unique
-                pass
+                query = s.query(Topic).filter(Topic.alt == data.alt)
+                if not query.first():
+                    s.add(data)
+                    s.commit()
+                    self.log.info('add success:')
             except sqlite3.Error as e:
                 self.log.error(e)
+            import time
+            time.sleep(1)
 
 
 class PageTopicConsumer(Thread):
-    def __init__(self, topic_queue, list_queue):
+    def __init__(self, topic_queue, list_queue=None):
         Thread.__init__(self, name="PageTopicConsumer")
         self.log = LogHandler("PageTopicConsumer")
         self.topic_queue = topic_queue
         self.list_queue = list_queue
 
     def run(self):
-        conn = sqlite3.connect('result.sqlite', isolation_level=None)
-        conn.text_factory = str
-        cursor = conn.cursor()
-        res = cursor.execute(
-            "SELECT URL FROM rent WHERE avatar IS NULL LIMIT 1000").fetchall()
-        for row in res:
-            self.list_queue.put(row[0])
+        # s = Utils.getSession()
+        from sqlalchemy import create_engine
+        engine = create_engine('sqlite:///result.sqlite')
+        from sqlalchemy.orm import sessionmaker
+        session = sessionmaker()
+        session.configure(bind=engine)
+        s = session()
+        # res = s.query(Topic).limit(1000)
+        # for row in res:
+        # self.list_queue.put(row[0])
 
         while(1):
             data = self.topic_queue.get()
             try:
-                cursor.execute("update rent set publishdate='{}',name='{}',avatar='{}',images='{}',paragraph='{}' where url='{}'".format(
-                    data['publishdate'], data['name'], data['avatar'], json.dumps(data['images']),data['paragraph'], data['url']))
-                self.log.info('update success:')
+                query = s.query(Topic).filter(Topic.alt == data.alt)
+                if not query.first():
+                    s.add(data)
+                    self.log.info('add success:')
+                else:
+                    topic = {"updated": data.updated, "author": data.author, "photos": data.photos, "like_count": data.like_count,
+                             "created": data.created, "content": data.content, "comments_count": data.comments_count}
+                    query.update(topic)
+                    self.log.info('update success:')
 
+                s.commit()
             except sqlite3.Error as e:
                 self.log.error(e)

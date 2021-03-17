@@ -1,20 +1,21 @@
 import datetime
 import os
+import signal
 import sqlite3
 import sys
 import threading
 import time
-from queue import Empty, Queue
+from queue import Queue
 
 import requests
-from bs4 import BeautifulSoup
 from lxml import etree
 from random_user_agent.params import OperatingSystem, SoftwareName
 from random_user_agent.user_agent import UserAgent
 
 import Config
-from consumer import PageTopicConsumer, PageListConsumer
+from consumer import PageListConsumer, PageTopicConsumer
 from logHandler import LogHandler
+from topic import Topic
 from utils import Utils
 
 
@@ -32,15 +33,14 @@ class Spider(object):
             'DNT': '1',
             'HOST': 'www.douban.com',
             'referer': 'www.douban.com',
+            'Upgrade-Insecure-Requests': "1",
+            'Sec-Fetch-Site': "none",
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-User': "?1",
+            'Sec-Fetch-Dest': "document",
             'Cookie': self.config.douban_cookie
         }
-        self.douban_headers['Upgrade-Insecure-Requests'] = "1"
-        self.douban_headers['Sec-Fetch-Site'] = "none"
-        self.douban_headers['Sec-Fetch-Mode'] = "navigate"
-        self.douban_headers['Sec-Fetch-User'] = "?1"
-        self.douban_headers['Sec-Fetch-Dest'] = "document"
         self.douban_url = self.config.douban_url
-        self.douban_url_name = self.config.douban_url_name
 
         self.page_list_url_queue = Queue()
         self.page_topic_url_queue = Queue()
@@ -48,7 +48,7 @@ class Spider(object):
         self.page_topic_data_queue = Queue()
 
         self.log = LogHandler("spider")
-        self._init_page_tasks(self.douban_url[0])
+        self._init_page_tasks(self.douban_url)
 
     def refreshUA(self):
         software_names = [SoftwareName.CHROME.value]
@@ -58,39 +58,44 @@ class Spider(object):
             software_names=software_names, operating_systems=operating_systems, limit=1000)
         self.douban_headers['User-Agent'] = user_agent_rotator.get_random_user_agent()
 
-    def _init_page_tasks(self, group_url):
+    def _init_page_tasks(self, urls):
         """初始化页面任务
 
         @group_url, str, 小组URL
         """
-        for page in range(100):
-            url = group_url + str(page * 25)
-            self.page_list_url_queue.put(url)
+        for url in urls:
+            for page in range(20/int(len(urls))):
+                self.page_list_url_queue.put(url + str(page * 25))
 
     def parse_page_list(self, body):
-        soup = BeautifulSoup(body.text, "lxml")
-        paginator = soup.find_all(attrs={'class': 'paginator'})[0]
-        table = soup.find_all(attrs={'class': 'olt'})[0]
-        trs = table.find_all('tr')
-        trs.pop(0)
+        """
+        从discussion页面提取topic并添加进队列
+        :param body: discussion html text
+        :return:
+        """
+        def getupdated(tr):
+            target = tr.xpath("td")[3].text
+            return datetime.datetime(2021, int(target.split(
+                '-')[0][1]), int(target.split(' ')[0].split('-')[1]), int(target.split(' ')[1].split(":")[0]), int(target.split(' ')[1].split(":")[1]))
+        body = etree.HTML(body.text)
+        trs = body.xpath('//tr[@class=""]')
         for tr in trs:
-            td = tr.find_all('td')
-            title_element = td[0].find_all('a')[0]
-            title_text = title_element.get('title')
-            time_text = td[1].get('title')
-            target = td[3].text
-            target_time = datetime.datetime(2021, int(target.split(
-                '-')[0][1]), int(target.split(' ')[0].split('-')[1]))
-            link_text = title_element.get('href')
-            reply_count = td[2].text
-            spider.list_data_queue.put({'title_text': title_text, 'link_text': link_text, 'target_time': target_time,
-                                        "keyword": "", "douban_url_name": "beijingzufang", "reply_count": reply_count})
+            title = tr.xpath('td/a/text()')[0].strip()
+            alt = tr.xpath('td/a/@href')[0]
+            username = tr.xpath('td/a')[1].text
+            comments_count = tr.xpath("td")[2].text  # may be None
+            updated = getupdated(tr)
+
+            self.page_list_data_queue.put(Topic(title=title, alt=alt, username=username,
+                                                comments_count=comments_count, updated=updated))
 
     def parse_page_topic(self, body, url):
         body = etree.HTML(body)
         # title = body.xpath("//tr/td[@class='tablecc']/text()")[0]
-        rich_content = body.xpath('//div[@class="rich-content topic-richtext"]')
-        paragraph = '||x||'.join(body.xpath('//div[@class="rich-content topic-richtext"]/p/text()'))
+        rich_content = body.xpath(
+            '//div[@class="rich-content topic-richtext"]')
+        paragraph = '||x||'.join(body.xpath(
+            '//div[@class="rich-content topic-richtext"]/p/text()'))
         author_name = body.xpath(
             "//*[@id='topic-content']/div[2]/h3/span[1]/a")[0].text
         author_avatar = body.xpath(
@@ -101,9 +106,9 @@ class Spider(object):
             '//div[@class="image-container image-float-center"]/*/img/@src')
 
         self.page_topic_data_queue.put({'publishdate': datetime.datetime.strptime(publish_date.replace(
-            " ", "&"), "%Y-%m-%d&%H:%M:%S"), "name": author_name, "avatar": author_avatar, "images": img_urls, "url": url,"paragraph":paragraph})
+            " ", "&"), "%Y-%m-%d&%H:%M:%S"), "name": author_name, "avatar": author_avatar, "images": img_urls, "url": url, "paragraph": paragraph})
 
-    def craw_page_list(self, i, page_queue, douban_url_name, keyword, douban_headers):
+    def craw_page_list(self, page_queue):
         while(1):
             url_link = page_queue.get()
             self.refreshUA()
@@ -128,7 +133,7 @@ class Spider(object):
                 if len(message) > 80:
                     message = message[:80]
                 self.log.error(message)
-
+            time.sleep(self.config.douban_sleep_time)
 
     def craw_page_topic(self):
         while(1):
@@ -154,13 +159,14 @@ class Spider(object):
                 if len(message) > 80:
                     message = message[:80]
                 self.log.error(message)
+            time.sleep(self.config.douban_sleep_time)
 
-    def runThread(self):
+    def runListThread(self):
         threads = list()
         for i in range(15):
-            threads.append(threading.Thread(target=self.craw_page_list, args=(
-                0, self.page_list_url_queue, "beijingzufang", "", self.douban_headers,)))
-        threads.append(PageListConsumer(spider.list_data_queue))
+            threads.append(threading.Thread(
+                target=self.craw_page_list, args=(self.page_list_url_queue)))
+        threads.append(PageListConsumer(self.page_list_data_queue))
         for index, thread in enumerate(threads):
             thread.start()
         for index, thread in enumerate(threads):
@@ -172,22 +178,38 @@ class Spider(object):
             x = threading.Thread(target=self.craw_page_topic, args=())
             threads.append(x)
         threads.append(PageTopicConsumer(
-            spider.topic_data_queue, spider.page_topic_queue))
+            self.page_list_data_queue, self.page_topic_url_queue))
         for index, thread in enumerate(threads):
             thread.start()
         for index, thread in enumerate(threads):
             thread.join()
-        # conn = sqlite3.connect('result.sqlite', isolation_level=None)
-        # conn.text_factory = str
-        # cursor = conn.cursor()
-        # res = cursor.execute(
-        #     "SELECT URL FROM rent WHERE avatar IS NULL LIMIT 1000").fetchall()
-        # for row in res:
-        #     self.page_topic_queue.put(row[0])
-        # self.craw_page_topic()
-        
 
 
+def start():
+    def handler(signum, frame):
+        print("Times up! Exiting...")
+        os._exit(0)
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(500)
+    # spider.runTopicThread()
+    spider.runListThread()
+
+
+def printtime():
+    import os
+    from datetime import datetime
+    sysDate = datetime.now()
+    curSysDate = (str(sysDate))
+    curDate = curSysDate[0:10]
+    curHour = curSysDate[11:13]
+    curMin = curSysDate[14:16]
+    curTime = curHour + '_' + curMin
+    folderName = curDate + '_' + curTime
+    os.mkdir(folderName)
+    print("once")
+
+
+    # exit()
 if __name__ == '__main__':
     spider = Spider()
-    spider.runTopicThread()
+    start()
