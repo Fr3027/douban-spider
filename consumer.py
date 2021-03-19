@@ -8,10 +8,10 @@ from utils import Utils
 from sqlalchemy.exc import IntegrityError
 
 
-class PageListConsumer(Thread):
+class DiscussionConsumer(Thread):
     def __init__(self, queue):
-        Thread.__init__(self, name="PageListConsumer")
-        self.log = LogHandler("PageListConsumer")
+        Thread.__init__(self, name="DiscussionConsumer")
+        self.log = LogHandler("DiscussionConsumer")
         self.queue = queue
 
     def run(self):
@@ -35,10 +35,10 @@ class PageListConsumer(Thread):
             time.sleep(1)
 
 
-class PageTopicConsumer(Thread):
+class TopicConsumer(Thread):
     def __init__(self, topic_queue, list_queue=None):
-        Thread.__init__(self, name="PageTopicConsumer")
-        self.log = LogHandler("PageTopicConsumer")
+        Thread.__init__(self, name="TopicConsumer")
+        self.log = LogHandler("TopicConsumer")
         self.topic_queue = topic_queue
         self.list_queue = list_queue
 

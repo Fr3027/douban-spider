@@ -1,8 +1,6 @@
 import sqlite3
-import sys
-import time
 import datetime
-import os
+import requests
 
 
 class Utils(object):
@@ -32,13 +30,16 @@ class Utils(object):
             return datetime.date.today()
 
     @staticmethod
-    def getSession():
+    def get_session():
         from sqlalchemy import create_engine
         engine = create_engine('sqlite:///result.sqlite')
         from sqlalchemy.orm import sessionmaker
         session = sessionmaker()
         session.configure(bind=engine)
         return session()
+    @staticmethod
+    def get_proxy():
+        return requests.get("http://127.0.0.1:5010/get/").json().get("proxy")
         
     def export(self, filename):
         conn = sqlite3.connect(filename)
