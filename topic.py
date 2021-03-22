@@ -16,6 +16,7 @@ class Topic(Base):
     content = Column(String)
     photos = Column(String)
     author = Column(String)
+    groupname =Column(String)
     updated = Column(DateTime)
     created = Column(DateTime)
 

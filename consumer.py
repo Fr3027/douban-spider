@@ -1,11 +1,8 @@
 from threading import Thread
 import sqlite3
-import json
-import datetime
 from logHandler import LogHandler
 from topic import Topic
 from utils import Utils
-from sqlalchemy.exc import IntegrityError
 
 
 class DiscussionConsumer(Thread):
@@ -45,7 +42,8 @@ class TopicConsumer(Thread):
     def run(self):
         # s = Utils.getSession()
         from sqlalchemy import create_engine
-        engine = create_engine('sqlite:///result.sqlite')
+        # engine = create_engine('sqlite:///result.sqlite')
+        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
         from sqlalchemy.orm import sessionmaker
         session = sessionmaker()
         session.configure(bind=engine)
@@ -53,7 +51,7 @@ class TopicConsumer(Thread):
         # res = s.query(Topic).limit(1000)
         # for row in res:
         # self.list_queue.put(row[0])
-
+        # count = 0
         while(1):
             data = self.topic_queue.get()
             try:
@@ -63,10 +61,11 @@ class TopicConsumer(Thread):
                     self.log.info('add success:')
                 else:
                     topic = {"updated": data.updated, "author": data.author, "photos": data.photos, "like_count": data.like_count,
-                             "created": data.created, "content": data.content, "comments_count": data.comments_count}
+                             "created": data.created, "content": data.content, "comments_count": data.comments_count if data.comments_count else 0}
                     query.update(topic)
                     self.log.info('update success:')
-
+                # count  = count + 1
+                # self.log.debug('count : {}'.format(count))
                 s.commit()
             except sqlite3.Error as e:
                 self.log.error(e)

@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import random
 import signal
@@ -34,12 +35,12 @@ class DoubanApiProvider(threading.Thread):
                     "https": "http://{}".format(proxy)}, verify=False).json()
                 for topic in res['topics']:
                     t = Topic(updated=datetime.strptime(topic['updated'], "%Y-%m-%d %H:%M:%S"), author=json.dumps(topic['author'], ensure_ascii=False), photos=json.dumps(topic['photos'], ensure_ascii=False), like_count=topic['like_count'],
-                              alt=topic['alt'], title=topic['title'], created=datetime.strptime(topic['created'], "%Y-%m-%d %H:%M:%S"), content=topic['content'], comments_count=topic['comments_count'], username=topic['author']['name'])
+                              alt=topic['alt'], title=topic['title'], created=datetime.strptime(topic['created'], "%Y-%m-%d %H:%M:%S"), content=topic['content'], comments_count=topic['comments_count'], username=topic['author']['name'],groupname=re.findall(r'(?<=group\/).*(?=\/topics)',url)[0])
                     self._topics.put(t)
             except Exception as e:
                 self._pages.put(url)
-                requests.get(
-                    "http://127.0.0.1:5010/delete?proxy={}".format(proxy))
+                # requests.get(
+                    # "http://127.0.0.1:5010/delete?proxy={}".format(proxy))
                 message = str(e)
                 if len(message) > 80:
                     message = message[:80]
@@ -47,10 +48,14 @@ class DoubanApiProvider(threading.Thread):
 
 
 def init_page_tasks(pages):
-    urls = ['https://api.douban.com/v2/group/beijingzufang/topics']
+    groupnames =['beijingzufang','zhufang','opking','279962']
+    urls = ['https://api.douban.com/v2/group/{}/topics'.format(name) for name in groupnames]
+    # urls = ['https://api.douban.com/v2/group/beijingzufang/topics','https://api.douban.com/v2/group/zhufang/topics','https://api.douban.com/v2/group/opking/topics','https://api.douban.com/v2/group/opking/topics',]
     for url in urls:
-        for start in np.arange(0, int(100/int(len(urls))), 1):
-            pages.put(url+'?count=100&start='+str(start))
+        for i in range(20):
+            pages.put(url+'?count=100&start=0')
+        # for start in np.arange(0, 100, 2):
+            # pages.put(url+'?count=100&start='+str(start))
 
 
 def run_program():
@@ -61,11 +66,11 @@ def run_program():
         print("Times up! Exiting...")
         os._exit(0)
     signal.signal(signal.SIGALRM, handler)
-    signal.alarm(500)
+    signal.alarm(240)
 
     init_page_tasks(pages)
     threads = list()
-    for i in range(15):
+    for i in range(100):
         x = DoubanApiProvider(pages, topics)
         threads.append(x)
     threads.append(TopicConsumer(
@@ -75,5 +80,5 @@ def run_program():
     for index, thread in enumerate(threads):
         thread.join()
 
-
-run_program()
+if __name__ == '__main__':
+    run_program()
