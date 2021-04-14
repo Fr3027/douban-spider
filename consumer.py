@@ -87,5 +87,6 @@ class UserConsumer(Thread):
             try:
                 s.add(data)
                 s.commit()
+                self.log.info('add success')
             except sqlite3.Error as e:
                 self.log.error(e)
