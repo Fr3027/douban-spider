@@ -19,6 +19,6 @@ class Topic(Base):
     groupname =Column(String)
     updated = Column(DateTime)
     created = Column(DateTime)
-
+    is_agent = Column(String)
 
 
