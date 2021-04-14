@@ -78,7 +78,8 @@ def init_page_tasks(pages):
     from sqlalchemy.orm import sessionmaker
     session = sessionmaker()
     session.configure(bind=engine)
-    query = session.query(User).limit(100)
+    s = session()
+    query = s.query(User).limit(100)
     users = query.all()
     urls = [
         'https://api.douban.com/v2/user/{}'.format(user.uid) for user in users]
