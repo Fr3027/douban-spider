@@ -48,10 +48,6 @@ class TopicConsumer(Thread):
         session = sessionmaker()
         session.configure(bind=engine)
         s = session()
-        # res = s.query(Topic).limit(1000)
-        # for row in res:
-        # self.list_queue.put(row[0])
-        # count = 0
         while(1):
             data = self.topic_queue.get()
             try:
@@ -66,6 +62,30 @@ class TopicConsumer(Thread):
                     self.log.info('update success:')
                 # count  = count + 1
                 # self.log.debug('count : {}'.format(count))
+                s.commit()
+            except sqlite3.Error as e:
+                self.log.error(e)
+        
+
+class UserConsumer(Thread):
+    def __init__(self, user_queue):
+        Thread.__init__(self, name="UserConsumer")
+        self.log = LogHandler("UserConsumer")
+        self.user_queue = user_queue
+
+    def run(self):
+        # s = Utils.getSession()
+        from sqlalchemy import create_engine
+        # engine = create_engine('sqlite:///result.sqlite')
+        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
+        from sqlalchemy.orm import sessionmaker
+        session = sessionmaker()
+        session.configure(bind=engine)
+        s = session()
+        while(1):
+            data = self.user_queue.get()
+            try:
+                s.add(data)
                 s.commit()
             except sqlite3.Error as e:
                 self.log.error(e)

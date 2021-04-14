@@ -13,9 +13,10 @@ from random_user_agent.params import OperatingSystem, SoftwareName
 from random_user_agent.user_agent import UserAgent
 
 import Config
-from consumer import DiscussionConsumer, TopicConsumer
+from consumer import DiscussionConsumer, TopicConsumer, UserConsumer
 from logHandler import LogHandler
 from topic import Topic
+from user import User
 from utils import Utils
 
 douban_headers = {
@@ -33,13 +34,14 @@ def refreshUA():
 
 
 class DoubanApiProvider(threading.Thread):
-    def __init__(self, pages, topics):
+    def __init__(self, pages, topics, users):
         threading.Thread.__init__(self)
         self._apikey = random.choice(['054022eaeae0b00e0fc068c0c0a2102a',
                                       '0df993c66c0c636e29ecbb5344252a4a', '0b2bdeda43b5688921839c8ecb20399b'])
         self._log = LogHandler("DoubanApiThread")
         self._pages = pages
         self._topics = topics
+        self._users = users
 
     def run(self):
         while(True):
@@ -53,6 +55,10 @@ class DoubanApiProvider(threading.Thread):
                     t = Topic(updated=datetime.strptime(topic['updated'], "%Y-%m-%d %H:%M:%S"), author=json.dumps(topic['author'], ensure_ascii=False), photos=json.dumps(topic['photos'], ensure_ascii=False), like_count=topic['like_count'],
                               alt=topic['alt'], title=topic['title'], created=datetime.strptime(topic['created'], "%Y-%m-%d %H:%M:%S"), content=topic['content'], comments_count=topic['comments_count'], username=topic['author']['name'], groupname=re.findall(r'(?<=group\/).*(?=\/topics)', url)[0],uid=topic['author']['uid'])
                     self._topics.put(t)
+
+                    u = User(username=t.username,uid=t['uid'])
+                    self._users.put(u)
+
             except Exception as e:
                 self._pages.put(url)
                 requests.get(
@@ -78,7 +84,7 @@ def init_page_tasks(pages):
 def run_program():
     pages = Queue()
     topics = Queue()
-
+    users = Queue()
     def handler(signum, frame):
         print("Times up! Exiting...")
         os._exit(0)
@@ -88,10 +94,12 @@ def run_program():
     init_page_tasks(pages)
     threads = list()
     for i in range(100):
-        x = DoubanApiProvider(pages, topics)
+        x = DoubanApiProvider(pages, topics,users)
         threads.append(x)
     threads.append(TopicConsumer(
         topics))
+    threads.append(UserConsumer(
+        users))
     for index, thread in enumerate(threads):
         thread.start()
     for index, thread in enumerate(threads):
