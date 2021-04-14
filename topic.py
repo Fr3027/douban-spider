@@ -20,5 +20,5 @@ class Topic(Base):
     updated = Column(DateTime)
     created = Column(DateTime)
     is_agent = Column(String)
-
+    uid = Column(String)
 
