@@ -3,6 +3,7 @@ import sqlite3
 from logHandler import LogHandler
 from topic import Topic
 from utils import Utils
+from user import User
 
 
 class DiscussionConsumer(Thread):
@@ -85,9 +86,11 @@ class UserConsumer(Thread):
         while(1):
             data = self.user_queue.get()
             try:
-                s.add(data)
-                s.commit()
-                self.log.info('add success')
+                query = s.query(User).filter(User.uid == data.uid)
+                if not query.first():
+                    s.add(data)
+                    s.commit()
+                    self.log.info('add success')
             except Exception as e:
                 message = str(e)
                 # if len(message) > 80:
