@@ -56,7 +56,7 @@ class DoubanApiProvider(threading.Thread):
                               alt=topic['alt'], title=topic['title'], created=datetime.strptime(topic['created'], "%Y-%m-%d %H:%M:%S"), content=topic['content'], comments_count=topic['comments_count'], username=topic['author']['name'], groupname=re.findall(r'(?<=group\/).*(?=\/topics)', url)[0],uid=topic['author']['uid'])
                     self._topics.put(t)
 
-                    u = User(username=t.username,uid=t['uid'])
+                    u = User(username=topic['author']['name'],uid=topic['author']['uid'])
                     self._users.put(u)
 
             except Exception as e:
