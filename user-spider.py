@@ -100,7 +100,7 @@ def run_program():
     init_page_tasks(pages)
     threads = list()
     for i in range(100):
-        x = DoubanUserProvider(pages, topics,users)
+        x = DoubanUserProvider(pages)
         threads.append(x)
     for index, thread in enumerate(threads):
         thread.start()
