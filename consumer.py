@@ -90,6 +90,6 @@ class UserConsumer(Thread):
                 self.log.info('add success')
             except Exception as e:
                 message = str(e)
-                if len(message) > 80:
-                    message = message[:80]
+                # if len(message) > 80:
+                    # message = message[:80]
                 self.log.error(message)
