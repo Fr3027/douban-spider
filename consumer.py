@@ -89,4 +89,7 @@ class UserConsumer(Thread):
                 s.commit()
                 self.log.info('add success')
             except sqlite3.Error as e:
-                self.log.error(e)
+                message = str(e)
+                if len(message) > 80:
+                    message = message[:80]
+                self.log.error(message)
