@@ -13,19 +13,14 @@ class DiscussionConsumer(Thread):
         self.queue = queue
 
     def run(self):
-        from sqlalchemy import create_engine
-        engine = create_engine('sqlite:///result.sqlite')
-        from sqlalchemy.orm import sessionmaker
-        session = sessionmaker()
-        session.configure(bind=engine)
-        s = session()
+        session = Utils.get_session()
         while(1):
             data = self.queue.get()
             try:
-                query = s.query(Topic).filter(Topic.alt == data.alt)
+                query = session.query(Topic).filter(Topic.alt == data.alt)
                 if not query.first():
-                    s.add(data)
-                    s.commit()
+                    session.add(data)
+                    session.commit()
                     self.log.info('add success:')
             except sqlite3.Error as e:
                 self.log.error(e)
@@ -41,25 +36,20 @@ class TopicConsumer(Thread):
         self.list_queue = list_queue
 
     def run(self):
-        from sqlalchemy import create_engine
-        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-        from sqlalchemy.orm import sessionmaker
-        session = sessionmaker()
-        session.configure(bind=engine)
-        s = session()
+        session = Utils.get_session()
         while(1):
             data = self.topic_queue.get()
             try:
-                query = s.query(Topic).filter(Topic.alt == data.alt)
+                query = session.query(Topic).filter(Topic.alt == data.alt)
                 if not query.first():
-                    s.add(data)
+                    session.add(data)
                     self.log.info('add success:')
                 else:
                     topic = {"updated": data.updated, "author": data.author, "photos": data.photos, "like_count": data.like_count,
                              "created": data.created, "content": data.content, "comments_count": data.comments_count if data.comments_count else 0}
                     query.update(topic)
                     self.log.info('update success:')
-                s.commit()
+                session.commit()
             except sqlite3.Error as e:
                 self.log.error(e)
         
@@ -71,14 +61,7 @@ class UserConsumer(Thread):
         self.user_queue = user_queue
 
     def run(self):
-        # s = Utils.getSession()
-        from sqlalchemy import create_engine
-        # engine = create_engine('sqlite:///result.sqlite')
-        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-        from sqlalchemy.orm import sessionmaker
-        session = sessionmaker()
-        session.configure(bind=engine)
-        s = session()
+        s = Utils.get_session()
         while(1):
             data = self.user_queue.get()
             try:

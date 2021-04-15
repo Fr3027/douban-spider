@@ -1,42 +1,16 @@
-import datetime
-
 import requests
+from sqlalchemy import create_engine
 
 
 class Utils(object):
-    @staticmethod
-    def isInBalckList(blacklist, toSearch):
-        if blacklist:
-            return False
-        for item in blacklist:
-            if toSearch.find(item) != -1:
-                return True
-        return False
+    engine = create_engine("mysql+pymysql://root:root@101.200.46.139/douban_spider")
 
-    @staticmethod
-    def getTimeFromStr(timeStr):
-        # 13:47:32 or 2016-05-25 or 2016-05-25 13:47:32
-        # all be transformed to datetime
-        if '-' in timeStr and ':' in timeStr:
-            return datetime.datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
-        elif '-' in timeStr:
-            return datetime.datetime.strptime(timeStr, "%Y-%m-%d")
-        elif ':' in timeStr:
-            date_today = datetime.date.today()
-            date = datetime.datetime.strptime(timeStr, "%H:%M:%S")
-            # date.replace(year, month, day)：生成一个新的日期对象
-            return date.replace(year=date_today.year, month=date_today.month, day=date_today.day)
-        else:
-            return datetime.date.today()
+    @classmethod
+    def get_session(cls):
 
-    @staticmethod
-    def get_session():
-        from sqlalchemy import create_engine
-        engine = create_engine(
-            "mysql+pymysql://root:root@localhost/douban_spider")
         from sqlalchemy.orm import sessionmaker
         session = sessionmaker()
-        session.configure(bind=engine)
+        session.configure(bind=cls.engine)
         return session()
 
     @staticmethod

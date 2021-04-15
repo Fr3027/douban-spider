@@ -5,7 +5,6 @@ import threading
 from datetime import datetime
 from queue import Queue
 
-import numpy as np
 import requests
 from random_user_agent.params import OperatingSystem, SoftwareName
 from random_user_agent.user_agent import UserAgent
@@ -37,12 +36,7 @@ class DoubanUserProvider(threading.Thread):
         self._pages = pages
 
     def run(self):
-        from sqlalchemy import create_engine
-        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-        from sqlalchemy.orm import sessionmaker
-        session = sessionmaker()
-        session.configure(bind=engine)
-        s = session()
+        session = Utils.get_session()
         while(True):
             url = self._pages.get() + '?apikey='+self._apikey
             proxy = Utils.get_proxy()
@@ -52,9 +46,9 @@ class DoubanUserProvider(threading.Thread):
                     "https": "http://{}".format(proxy)}, verify=False).json()
                 created = datetime.strptime(res['created'], "%Y-%m-%d %H:%M:%S")
                 
-                query = s.query(User).filter(User.uid == res['uid'])
+                query = session.query(User).filter(User.uid == res['uid'])
                 query.update({'created':created})
-                s.commit()
+                session.commit()
                 self._log.info("update success")
 
             except Exception as e:
@@ -68,12 +62,7 @@ class DoubanUserProvider(threading.Thread):
 
 
 def init_page_tasks(pages):
-    from sqlalchemy import create_engine
-    engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-    from sqlalchemy.orm import sessionmaker
-    session = sessionmaker()
-    session.configure(bind=engine)
-    s = session()
+    s = Utils.get_session()
     query = s.query(User).filter(User.created == None).limit(100)
     users = query.all()
     urls = [
