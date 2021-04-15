@@ -7,16 +7,14 @@ import threading
 from datetime import datetime
 from queue import Queue
 
-import numpy as np
 import requests
 from random_user_agent.params import OperatingSystem, SoftwareName
 from random_user_agent.user_agent import UserAgent
 
-import Config
 from consumer import DiscussionConsumer, TopicConsumer, UserConsumer
 from logHandler import LogHandler
-from topic import Topic
-from user import User
+from model.topic import Topic
+from model.user import User
 from utils import Utils
 
 douban_headers = {
@@ -33,34 +31,31 @@ def refreshUA():
     douban_headers['User-Agent'] = user_agent_rotator.get_random_user_agent()
 
 
-class DoubanUserProvider(threading.Thread):
-    def __init__(self, pages):
+class DoubanApiProvider(threading.Thread):
+    def __init__(self, pages, topics, users):
         threading.Thread.__init__(self)
         self._apikey = random.choice(['054022eaeae0b00e0fc068c0c0a2102a',
                                       '0df993c66c0c636e29ecbb5344252a4a', '0b2bdeda43b5688921839c8ecb20399b'])
-        self._log = LogHandler("DoubanUserThread")
+        self._log = LogHandler("DoubanApiThread")
         self._pages = pages
+        self._topics = topics
+        self._users = users
 
     def run(self):
-        from sqlalchemy import create_engine
-        engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-        from sqlalchemy.orm import sessionmaker
-        session = sessionmaker()
-        session.configure(bind=engine)
-        s = session()
         while(True):
-            url = self._pages.get() + '?apikey='+self._apikey
+            url = self._pages.get() + '&apikey='+self._apikey
             proxy = Utils.get_proxy()
             refreshUA()
             try:
                 res = requests.get(url, headers=douban_headers, proxies={
                     "https": "http://{}".format(proxy)}, verify=False).json()
-                created = datetime.strptime(res['created'], "%Y-%m-%d %H:%M:%S")
-                
-                query = s.query(User).filter(User.uid == res['uid'])
-                query.update({'created':created})
-                s.commit()
-                self._log.info("update success")
+                for topic in res['topics']:
+                    t = Topic(updated=datetime.strptime(topic['updated'], "%Y-%m-%d %H:%M:%S"), author=json.dumps(topic['author'], ensure_ascii=False), photos=json.dumps(topic['photos'], ensure_ascii=False), like_count=topic['like_count'],
+                              alt=topic['alt'], title=topic['title'], created=datetime.strptime(topic['created'], "%Y-%m-%d %H:%M:%S"), content=topic['content'], comments_count=topic['comments_count'], username=topic['author']['name'], groupname=re.findall(r'(?<=group\/).*(?=\/topics)', url)[0],uid=topic['author']['uid'])
+                    self._topics.put(t)
+
+                    u = User(username=topic['author']['name'],uid=topic['author']['uid'])
+                    self._users.put(u)
 
             except Exception as e:
                 self._pages.put(url)
@@ -73,18 +68,15 @@ class DoubanUserProvider(threading.Thread):
 
 
 def init_page_tasks(pages):
-    from sqlalchemy import create_engine
-    engine = create_engine("mysql+pymysql://root:root@localhost/douban_spider")
-    from sqlalchemy.orm import sessionmaker
-    session = sessionmaker()
-    session.configure(bind=engine)
-    s = session()
-    query = s.query(User).filter(User.created == None).limit(100)
-    users = query.all()
+    groupnames = ['beijingzufang', 'zhufang', 'opking', '279962']
     urls = [
-        'https://api.douban.com/v2/user/{}'.format(user.uid) for user in users]
+        'https://api.douban.com/v2/group/{}/topics'.format(name) for name in groupnames]
+    # urls = ['https://api.douban.com/v2/group/beijingzufang/topics','https://api.douban.com/v2/group/zhufang/topics','https://api.douban.com/v2/group/opking/topics','https://api.douban.com/v2/group/opking/topics',]
     for url in urls:
-        pages.put(url)
+        for i in range(20):
+            pages.put(url+'?count=100&start=0')
+        # for start in np.arange(0, 100, 2):
+            # pages.put(url+'?count=100&start='+str(start))
 
 
 def run_program():
@@ -100,8 +92,12 @@ def run_program():
     init_page_tasks(pages)
     threads = list()
     for i in range(100):
-        x = DoubanUserProvider(pages)
+        x = DoubanApiProvider(pages, topics,users)
         threads.append(x)
+    threads.append(TopicConsumer(
+        topics))
+    threads.append(UserConsumer(
+        users))
     for index, thread in enumerate(threads):
         thread.start()
     for index, thread in enumerate(threads):
