@@ -68,16 +68,17 @@ class DoubanApiProvider(threading.Thread):
 
 
 def init_page_tasks(pages):
-    groupnames = ['beijingzufang', 'zhufang', 'opking', '279962']
+    groupnames = ['beijingzufang', 'zhufang', 'opking']
+    alternate_groupnames = ['jumei','bjzf','sweethome','cbdrent']
     urls = [
         'https://api.douban.com/v2/group/{}/topics'.format(name) for name in groupnames]
-    # urls = ['https://api.douban.com/v2/group/beijingzufang/topics','https://api.douban.com/v2/group/zhufang/topics','https://api.douban.com/v2/group/opking/topics','https://api.douban.com/v2/group/opking/topics',]
+    alternate_urls = ['https://api.douban.com/v2/group/{}/topics'.format(name) for name in alternate_groupnames]
     for url in urls:
         for i in range(20):
             pages.put(url+'?count=100&start=0')
-        # for start in np.arange(0, 100, 2):
-            # pages.put(url+'?count=100&start='+str(start))
-
+    for url in alternate_urls:
+        for i in range(10):
+            pages.put(url+'?count=100&start=0')
 
 def run_program():
     pages = Queue()
@@ -91,7 +92,7 @@ def run_program():
 
     init_page_tasks(pages)
     threads = list()
-    for i in range(100):
+    for i in range(150):
         x = DoubanApiProvider(pages, topics,users)
         threads.append(x)
     threads.append(TopicConsumer(
