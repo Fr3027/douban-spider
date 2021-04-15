@@ -79,7 +79,7 @@ def init_page_tasks(pages):
     session = sessionmaker()
     session.configure(bind=engine)
     s = session()
-    query = s.query(User).limit(100)
+    query = s.query(User).filter(User.created == None).limit(100)
     users = query.all()
     urls = [
         'https://api.douban.com/v2/user/{}'.format(user.uid) for user in users]
