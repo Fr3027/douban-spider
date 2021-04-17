@@ -12,3 +12,4 @@ class User(Base):
     created = Column(DateTime)
     uid = Column(String)
     phone = Column(String)
+    credibility = Column(String)
